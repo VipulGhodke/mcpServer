@@ -123,10 +123,15 @@ mcp = FastMCP(
     auth=SimpleBearerAuthProvider(TOKEN),
 )
 
+# @mcp.get("/welcome")
+# async def welcome_message():
+#     return "Welcome to the MCP Server! Puch ki MKC"
+
 # --- Tool: validate (required by Puch) ---
 @mcp.tool
 async def validate() -> str:
     return MY_NUMBER
+
 
 # --- Tool: job_finder (now smart!) ---
 JobFinderDescription = RichToolDescription(
