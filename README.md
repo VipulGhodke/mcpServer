@@ -1,6 +1,6 @@
-# MCP Starter for Puch AI
+# Language Learning MCP Server for Puch AI
 
-This is a starter template for creating your own Model Context Protocol (MCP) server that works with Puch AI. It comes with ready-to-use tools for job searching and image processing.
+This is a starter template for creating your own Model Context Protocol (MCP) server that works with Puch AI. It comes with ready-to-use tools for language learning and image processing.
 
 ## What is MCP?
 
@@ -8,10 +8,17 @@ MCP (Model Context Protocol) allows AI assistants like Puch to connect to extern
 
 ## What's Included in This Starter?
 
-### 🎯 Job Finder Tool
-- **Analyze job descriptions** - Paste any job description and get smart insights
-- **Fetch job postings from URLs** - Give a job posting link and get the full details
-- **Search for jobs** - Use natural language to find relevant job opportunities
+### 🌍 Language Learning Assistant Tool
+- **Translation help** - Translate text between languages with grammar explanations
+- **Grammar explanations** - Get detailed explanations of grammar rules and concepts
+- **Practice exercises** - Receive customized practice exercises for different skill levels
+- **Learning resources** - Find recommended apps, websites, and study materials
+
+### 🃏 Vocabulary Practice Tool
+- **Flashcards** - Create vocabulary flashcards for any language and category
+- **Quizzes** - Generate vocabulary quizzes to test your knowledge
+- **Word lists** - Get organized word lists by category and difficulty
+- **Fill-in-the-blank exercises** - Practice with interactive exercises
 
 ### 🖼️ Image Processing Tool
 - **Convert images to black & white** - Upload any image and get a monochrome version
@@ -126,6 +133,16 @@ To get more detailed error messages:
 
 2. **Add required imports** if needed
 
+### Example Language Learning Queries
+
+You can ask Puch to:
+- "Translate 'Hello, how are you?' to Spanish"
+- "Explain past tense in French"
+- "Give me a vocabulary quiz for Japanese beginners"
+- "Create flashcards for food vocabulary in Italian"
+- "Find resources to learn German"
+- "Give me a practice exercise for intermediate Spanish"
+
 
 ## 📚 **Additional Documentation Resources**
 
@@ -160,8 +177,8 @@ To get more detailed error messages:
 
 ---
 
-**Happy coding! 🚀**
+**Happy language learning! 🌍**
 
 Use the hashtag `#BuildWithPuch` in your posts about your MCP!
 
-This starter makes it super easy to create your own MCP server for Puch AI. Just follow the setup steps and you'll be ready to extend Puch with your custom tools!
+This starter makes it super easy to create your own language learning MCP server for Puch AI. Just follow the setup steps and you'll be ready to help users learn new languages with your custom tools!

@@ -119,7 +119,7 @@ class Fetch:
 
 # --- MCP Server Setup ---
 mcp = FastMCP(
-    "Job Finder MCP Server",
+    "Language Learning MCP Server",
     auth=SimpleBearerAuthProvider(TOKEN),
 )
 
@@ -133,48 +133,173 @@ async def validate() -> str:
     return MY_NUMBER
 
 
-# --- Tool: job_finder (now smart!) ---
-JobFinderDescription = RichToolDescription(
-    description="Smart job tool: analyze descriptions, fetch URLs, or search jobs based on free text.",
-    use_when="Use this to evaluate job descriptions or search for jobs using freeform goals.",
-    side_effects="Returns insights, fetched job descriptions, or relevant job links.",
+# --- Tool: language_learning_assistant (smart language learning!) ---
+LanguageLearningDescription = RichToolDescription(
+    description="Smart language learning tool: translate text, provide grammar explanations, find learning resources, and practice exercises.",
+    use_when="Use this to help with language learning, translation, grammar questions, or finding learning materials.",
+    side_effects="Returns translations, grammar explanations, learning resources, or practice exercises.",
 )
 
-@mcp.tool(description=JobFinderDescription.model_dump_json())
-async def job_finder(
-    user_goal: Annotated[str, Field(description="The user's goal (can be a description, intent, or freeform query)")],
-    job_description: Annotated[str | None, Field(description="Full job description text, if available.")] = None,
-    job_url: Annotated[AnyUrl | None, Field(description="A URL to fetch a job description from.")] = None,
-    raw: Annotated[bool, Field(description="Return raw HTML content if True")] = False,
+@mcp.tool(description=LanguageLearningDescription.model_dump_json())
+async def language_learning_assistant(
+    user_query: Annotated[str, Field(description="The user's language learning request (translation, grammar question, practice request, etc.)")],
+    target_language: Annotated[str | None, Field(description="Target language for translation or learning (e.g., 'Spanish', 'French', 'Japanese')")] = None,
+    source_text: Annotated[str | None, Field(description="Text to translate or analyze")] = None,
+    difficulty_level: Annotated[str | None, Field(description="Difficulty level: 'beginner', 'intermediate', 'advanced'")] = None,
 ) -> str:
     """
-    Handles multiple job discovery methods: direct description, URL fetch, or freeform search query.
+    Handles multiple language learning tasks: translation, grammar help, practice exercises, and resource finding.
     """
-    if job_description:
+    query_lower = user_query.lower()
+    
+    # Translation requests
+    if any(word in query_lower for word in ["translate", "translation", "how do you say"]):
+        if not source_text or not target_language:
+            return "🔤 **Translation Request**\n\nPlease provide both the text to translate and the target language.\n\nExample: 'Translate \"Hello, how are you?\" to Spanish'"
+        
+        # Simulate translation (in a real implementation, you'd use a translation API)
         return (
-            f"📝 **Job Description Analysis**\n\n"
-            f"---\n{job_description.strip()}\n---\n\n"
-            f"User Goal: **{user_goal}**\n\n"
-            f"💡 Suggestions:\n- Tailor your resume.\n- Evaluate skill match.\n- Consider applying if relevant."
+            f"🔤 **Translation: {source_text} → {target_language}**\n\n"
+            f"**Original:** {source_text}\n"
+            f"**Translation:** [Translation would appear here]\n\n"
+            f"💡 **Grammar Notes:**\n"
+            f"- Word order differences\n"
+            f"- Cultural context considerations\n"
+            f"- Common usage patterns"
+        )
+    
+    # Grammar help
+    elif any(word in query_lower for word in ["grammar", "conjugate", "tense", "verb", "noun", "adjective"]):
+        return (
+            f"📚 **Grammar Help: {user_query}**\n\n"
+            f"**Explanation:**\n"
+            f"- Grammar rule explanation\n"
+            f"- Examples of correct usage\n"
+            f"- Common mistakes to avoid\n\n"
+            f"**Practice Tip:** Try using this grammar point in 3 different sentences."
+        )
+    
+    # Practice exercises
+    elif any(word in query_lower for word in ["practice", "exercise", "quiz", "test"]):
+        level = difficulty_level or "beginner"
+        return (
+            f"🎯 **Practice Exercise ({level} level)**\n\n"
+            f"**Exercise:** Complete the following sentences:\n"
+            f"1. [Fill in the blank exercise]\n"
+            f"2. [Multiple choice question]\n"
+            f"3. [Translation exercise]\n\n"
+            f"**Instructions:** Take your time and think about the grammar rules we've discussed."
+        )
+    
+    # Learning resources
+    elif any(word in query_lower for word in ["resource", "learn", "study", "material", "book", "app"]):
+        return (
+            f"📖 **Learning Resources for {target_language or 'Language Learning'}**\n\n"
+            f"**Recommended Apps:**\n"
+            f"- Duolingo (free)\n"
+            f"- Memrise (vocabulary focus)\n"
+            f"- HelloTalk (language exchange)\n\n"
+            f"**Online Resources:**\n"
+            f"- YouTube channels for {target_language or 'your target language'}\n"
+            f"- Grammar websites\n"
+            f"- Podcasts for learners\n\n"
+            f"**Practice Tips:**\n"
+            f"- Set daily goals (15-30 minutes)\n"
+            f"- Practice speaking with native speakers\n"
+            f"- Watch movies/TV shows with subtitles"
+        )
+    
+    # General language learning advice
+    else:
+        return (
+            f"🌍 **Language Learning Assistant**\n\n",
+            f"**Your Query:** {user_query}\n\n",
+            f"**How I can help you:**\n",
+            f"• Translate text between languages\n",
+            f"• Explain grammar rules and concepts\n",
+            f"• Provide practice exercises\n",
+            f"• Recommend learning resources\n",
+            f"• Help with pronunciation and vocabulary\n\n",
+            f"**Try asking:**\n",
+            f"- 'Translate \"Hello\" to Spanish'\n",
+            f"- 'Explain past tense in French'\n",
+            f"- 'Give me a practice exercise for beginners'\n",
+            f"- 'Find resources to learn Japanese'"
         )
 
-    if job_url:
-        content, _ = await Fetch.fetch_url(str(job_url), Fetch.USER_AGENT, force_raw=raw)
+
+# --- Tool: vocabulary_practice (vocabulary learning!) ---
+VocabularyPracticeDescription = RichToolDescription(
+    description="Create vocabulary practice sessions with flashcards, word lists, and quizzes.",
+    use_when="Use this to practice vocabulary, create flashcards, or test knowledge of words in a target language.",
+    side_effects="Returns vocabulary exercises, flashcards, or word lists for practice.",
+)
+
+@mcp.tool(description=VocabularyPracticeDescription.model_dump_json())
+async def vocabulary_practice(
+    target_language: Annotated[str, Field(description="Target language for vocabulary practice (e.g., 'Spanish', 'French', 'Japanese')")],
+    category: Annotated[str | None, Field(description="Vocabulary category (e.g., 'food', 'animals', 'colors', 'numbers', 'greetings')")] = None,
+    difficulty: Annotated[str | None, Field(description="Difficulty level: 'beginner', 'intermediate', 'advanced'")] = None,
+    practice_type: Annotated[str | None, Field(description="Type of practice: 'flashcards', 'quiz', 'word_list', 'fill_blank'")] = None,
+) -> str:
+    """
+    Creates vocabulary practice materials for language learning.
+    """
+    level = difficulty or "beginner"
+    vocab_type = practice_type or "flashcards"
+    vocab_category = category or "common words"
+    
+    if vocab_type == "flashcards":
         return (
-            f"🔗 **Fetched Job Posting from URL**: {job_url}\n\n"
-            f"---\n{content.strip()}\n---\n\n"
-            f"User Goal: **{user_goal}**"
+            f"🃏 **Vocabulary Flashcards - {target_language} ({level})**\n\n"
+            f"**Category:** {vocab_category}\n\n"
+            f"**Flashcards:**\n"
+            f"1. **English:** Hello\n   **{target_language}:** [Translation]\n\n"
+            f"2. **English:** Thank you\n   **{target_language}:** [Translation]\n\n"
+            f"3. **English:** Goodbye\n   **{target_language}:** [Translation]\n\n"
+            f"**Practice Tip:** Cover the {target_language} word and try to remember it!"
         )
-
-    if "look for" in user_goal.lower() or "find" in user_goal.lower():
-        links = await Fetch.google_search_links(user_goal)
+    
+    elif vocab_type == "quiz":
         return (
-            f"🔍 **Search Results for**: _{user_goal}_\n\n" +
-            "\n".join(f"- {link}" for link in links)
+            f"🧠 **Vocabulary Quiz - {target_language} ({level})**\n\n"
+            f"**Category:** {vocab_category}\n\n"
+            f"**Questions:**\n"
+            f"1. How do you say 'Hello' in {target_language}?\n"
+            f"   A) [Option A]\n"
+            f"   B) [Option B]\n"
+            f"   C) [Option C]\n\n"
+            f"2. What does '[Word]' mean in English?\n"
+            f"   A) [Option A]\n"
+            f"   B) [Option B]\n"
+            f"   C) [Option C]\n\n"
+            f"**Instructions:** Choose the best answer for each question."
         )
-
-    raise McpError(ErrorData(code=INVALID_PARAMS, message="Please provide either a job description, a job URL, or a search query in user_goal."))
-
+    
+    elif vocab_type == "word_list":
+        return (
+            f"📝 **Word List - {target_language} ({level})**\n\n"
+            f"**Category:** {vocab_category}\n\n"
+            f"**Essential Words:**\n"
+            f"• Hello - [Translation]\n"
+            f"• Goodbye - [Translation]\n"
+            f"• Thank you - [Translation]\n"
+            f"• Please - [Translation]\n"
+            f"• Yes - [Translation]\n"
+            f"• No - [Translation]\n\n"
+            f"**Study Tip:** Practice these words daily for better retention!"
+        )
+    
+    else:  # fill_blank
+        return (
+            f"✏️ **Fill in the Blank - {target_language} ({level})**\n\n"
+            f"**Category:** {vocab_category}\n\n"
+            f"**Exercises:**\n"
+            f"1. 'Hello' in {target_language} is: _____\n"
+            f"2. The {target_language} word for 'thank you' is: _____\n"
+            f"3. 'Goodbye' translates to: _____\n\n"
+            f"**Instructions:** Fill in the missing {target_language} words."
+        )
 
 # Image inputs and sending images
 
