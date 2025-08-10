@@ -1,17 +1,12 @@
 # MCP Starter for Puch AI
 
-This is a starter template for creating your own Model Context Protocol (MCP) server that works with Puch AI. It comes with ready-to-use tools for job searching and image processing.
+This is a starter template for creating your own Model Context Protocol (MCP) server that works with Puch AI. It comes with ready-to-use tools for language learning and image processing.
 
 ## What is MCP?
 
 MCP (Model Context Protocol) allows AI assistants like Puch to connect to external tools and data sources safely. Think of it like giving your AI extra superpowers without compromising security.
 
 ## What's Included in This Starter?
-
-### 🎯 Job Finder Tool
-- **Analyze job descriptions** - Paste any job description and get smart insights
-- **Fetch job postings from URLs** - Give a job posting link and get the full details
-- **Search for jobs** - Use natural language to find relevant job opportunities
 
 ### 🖼️ Image Processing Tool
 - **Convert images to black & white** - Upload any image and get a monochrome version
@@ -62,6 +57,34 @@ MY_NUMBER=919876543210
 ```bash
 cd mcp-bearer-token
 python mcp_starter.py
+### Step 3b: Run the Backend API (Optional Web App Backend)
+
+This repo now includes a FastAPI backend providing Duolingo-like building blocks (users, profiles, skills, lessons, exercises, attempts, streaks, SRS, gamification).
+
+1. Configure environment:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with at least:
+
+```env
+AUTH_TOKEN=your_secret_token_here
+MY_NUMBER=919876543210
+DATABASE_URL=sqlite+aiosqlite:///./app.db
+REDIS_URL=redis://localhost:6379/0
+BACKEND_PORT=8090
+```
+
+2. Start API server:
+
+```bash
+uv run uvicorn backend.main:app --host 0.0.0.0 --port %BACKEND_PORT%
+```
+
+Open: http://localhost:%BACKEND_PORT%/docs
+
 ```
 
 You'll see: `🚀 Starting MCP server on http://0.0.0.0:8086`
@@ -101,6 +124,18 @@ You can also deploy this to services like:
    ```
    /mcp connect https://your-domain.ngrok.app/mcp your_secret_token_here
    ```
+
+## API Endpoints Exposed by Backend
+
+- POST `/sessions/start`: Create an adaptive session for a `user_id` and optional `lesson_id`.
+- POST `/sessions/submit`: Submit an answer; returns grading result and awarded XP; updates streak/hearts.
+- GET `/gamification/status?user_id=`: Returns xp, hearts, streak, daily goals, and weekly XP.
+- GET `/srs/due?user_id=&limit=`: Returns due flashcards for spaced repetition.
+- POST `/media/image/analyze`: Analyze an image (tracks media event when `user_id` provided).
+- POST `/media/audio/transcribe`: Transcribe audio (tracks media event when `user_id` provided).
+- POST `/media/event`: Record a media-related event.
+
+These are consumed by the MCP tools (`session_start`, `submit_answer`, `gamification_status`, `srs_due`, `image_analyze`, `transcribe_audio`). The tools now render deterministic prompts and grading summaries to prevent chat-layer hallucinations.
 
 ### Debug Mode
 

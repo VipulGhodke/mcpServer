@@ -7,17 +7,16 @@ from fastmcp.server.auth.providers.bearer import BearerAuthProvider, RSAKeyPair
 from mcp import ErrorData, McpError
 from mcp.server.auth.provider import AccessToken
 from mcp.types import TextContent, ImageContent, INVALID_PARAMS, INTERNAL_ERROR
-from pydantic import BaseModel, Field, AnyUrl
+from pydantic import BaseModel, Field
 
-import markdownify
 import httpx
-import readabilipy
 
 # --- Load environment variables ---
 load_dotenv()
 
 TOKEN = os.environ.get("AUTH_TOKEN")
 MY_NUMBER = os.environ.get("MY_NUMBER")
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8090")
 
 assert TOKEN is not None, "Please set AUTH_TOKEN in your .env file"
 assert MY_NUMBER is not None, "Please set MY_NUMBER in your .env file"
@@ -45,81 +44,10 @@ class RichToolDescription(BaseModel):
     use_when: str
     side_effects: str | None = None
 
-# --- Fetch Utility Class ---
-class Fetch:
-    USER_AGENT = "Puch/1.0 (Autonomous)"
-
-    @classmethod
-    async def fetch_url(
-        cls,
-        url: str,
-        user_agent: str,
-        force_raw: bool = False,
-    ) -> tuple[str, str]:
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    url,
-                    follow_redirects=True,
-                    headers={"User-Agent": user_agent},
-                    timeout=30,
-                )
-            except httpx.HTTPError as e:
-                raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
-
-            if response.status_code >= 400:
-                raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url} - status code {response.status_code}"))
-
-            page_raw = response.text
-
-        content_type = response.headers.get("content-type", "")
-        is_page_html = "text/html" in content_type
-
-        if is_page_html and not force_raw:
-            return cls.extract_content_from_html(page_raw), ""
-
-        return (
-            page_raw,
-            f"Content type {content_type} cannot be simplified to markdown, but here is the raw content:\n",
-        )
-
-    @staticmethod
-    def extract_content_from_html(html: str) -> str:
-        """Extract and convert HTML content to Markdown format."""
-        ret = readabilipy.simple_json.simple_json_from_html_string(html, use_readability=True)
-        if not ret or not ret.get("content"):
-            return "<error>Page failed to be simplified from HTML</error>"
-        content = markdownify.markdownify(ret["content"], heading_style=markdownify.ATX)
-        return content
-
-    @staticmethod
-    async def google_search_links(query: str, num_results: int = 5) -> list[str]:
-        """
-        Perform a scoped DuckDuckGo search and return a list of job posting URLs.
-        (Using DuckDuckGo because Google blocks most programmatic scraping.)
-        """
-        ddg_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
-        links = []
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(ddg_url, headers={"User-Agent": Fetch.USER_AGENT})
-            if resp.status_code != 200:
-                return ["<error>Failed to perform search.</error>"]
-
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for a in soup.find_all("a", class_="result__a", href=True):
-            href = a["href"]
-            if "http" in href:
-                links.append(href)
-            if len(links) >= num_results:
-                break
-
-        return links or ["<error>No results found.</error>"]
 
 # --- MCP Server Setup ---
 mcp = FastMCP(
-    "Job Finder MCP Server",
+    "ChatLingo MCP Server",
     auth=SimpleBearerAuthProvider(TOKEN),
 )
 
@@ -133,47 +61,6 @@ async def validate() -> str:
     return MY_NUMBER
 
 
-# --- Tool: job_finder (now smart!) ---
-JobFinderDescription = RichToolDescription(
-    description="Smart job tool: analyze descriptions, fetch URLs, or search jobs based on free text.",
-    use_when="Use this to evaluate job descriptions or search for jobs using freeform goals.",
-    side_effects="Returns insights, fetched job descriptions, or relevant job links.",
-)
-
-@mcp.tool(description=JobFinderDescription.model_dump_json())
-async def job_finder(
-    user_goal: Annotated[str, Field(description="The user's goal (can be a description, intent, or freeform query)")],
-    job_description: Annotated[str | None, Field(description="Full job description text, if available.")] = None,
-    job_url: Annotated[AnyUrl | None, Field(description="A URL to fetch a job description from.")] = None,
-    raw: Annotated[bool, Field(description="Return raw HTML content if True")] = False,
-) -> str:
-    """
-    Handles multiple job discovery methods: direct description, URL fetch, or freeform search query.
-    """
-    if job_description:
-        return (
-            f"📝 **Job Description Analysis**\n\n"
-            f"---\n{job_description.strip()}\n---\n\n"
-            f"User Goal: **{user_goal}**\n\n"
-            f"💡 Suggestions:\n- Tailor your resume.\n- Evaluate skill match.\n- Consider applying if relevant."
-        )
-
-    if job_url:
-        content, _ = await Fetch.fetch_url(str(job_url), Fetch.USER_AGENT, force_raw=raw)
-        return (
-            f"🔗 **Fetched Job Posting from URL**: {job_url}\n\n"
-            f"---\n{content.strip()}\n---\n\n"
-            f"User Goal: **{user_goal}**"
-        )
-
-    if "look for" in user_goal.lower() or "find" in user_goal.lower():
-        links = await Fetch.google_search_links(user_goal)
-        return (
-            f"🔍 **Search Results for**: _{user_goal}_\n\n" +
-            "\n".join(f"- {link}" for link in links)
-        )
-
-    raise McpError(ErrorData(code=INVALID_PARAMS, message="Please provide either a job description, a job URL, or a search query in user_goal."))
 
 
 # Image inputs and sending images
@@ -184,29 +71,248 @@ MAKE_IMG_BLACK_AND_WHITE_DESCRIPTION = RichToolDescription(
     side_effects="The image will be processed and saved in a black and white format.",
 )
 
-@mcp.tool(description=MAKE_IMG_BLACK_AND_WHITE_DESCRIPTION.model_dump_json())
-async def make_img_black_and_white(
-    puch_image_data: Annotated[str, Field(description="Base64-encoded image data to convert to black and white")] = None,
-) -> list[TextContent | ImageContent]:
-    import base64
-    import io
+# Removed: black-and-white conversion tool (not needed for ChatLingo)
 
-    from PIL import Image
 
-    try:
-        image_bytes = base64.b64decode(puch_image_data)
-        image = Image.open(io.BytesIO(image_bytes))
+# --- Duolingo-like tools that proxy to backend API ---
+DuolingoToolDescription = RichToolDescription(
+    description="ChatLingo tools: start a session, submit an answer, check your daily goals and streak, and review due vocab.",
+    use_when="Use to drive a structured language learning flow with XP, hearts, streaks, and adaptive difficulty.",
+)
 
-        bw_image = image.convert("L")
 
-        buf = io.BytesIO()
-        bw_image.save(buf, format="PNG")
-        bw_bytes = buf.getvalue()
-        bw_base64 = base64.b64encode(bw_bytes).decode("utf-8")
+@mcp.tool(description=DuolingoToolDescription.model_dump_json())
+async def session_start(
+    user_id: Annotated[str, Field(description="User identifier")],
+    lesson_id: Annotated[str | None, Field(description="Optional lesson id to focus session on")] = None,
+    learning_language: Annotated[str | None, Field(description="Optional target learning language, e.g., 'de', 'es'")] = None,
+) -> str:
+    async with httpx.AsyncClient() as client:
+        payload = {"user_id": user_id, "lesson_id": lesson_id, "learning_language": learning_language}
+        resp = await client.post(f"{BACKEND_URL}/sessions/start", json=payload)
+        if resp.status_code >= 400:
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Backend error: {resp.text}"))
+        # Deterministically render the next exercise to avoid upstream hallucinations.
+        try:
+            data = resp.json()
+        except Exception:
+            data = None
 
-        return [ImageContent(type="image", mimeType="image/png", data=bw_base64)]
-    except Exception as e:
-        raise McpError(ErrorData(code=INTERNAL_ERROR, message=str(e)))
+        # If language selection is required, offer language choices.
+        if data and data.get("requires_language_selection"):
+            langs = data.get("suggested_languages") or ["de", "es"]
+            suggestions = [{"title": f"Learn {l.upper()}", "id": f"set_lang_{l}"} for l in langs[:3]]
+            return (
+                "Welcome to ChatLingo!\n\n"
+                "Here’s how it works:\n"
+                "- Earn XP for correct answers and build your streak.\n"
+                "- Hearts represent your lives; wrong answers cost a heart. Hearts regenerate over time.\n"
+                "- Difficulty adapts to your performance.\n"
+                "- You can ask for a Hint, skip with Next, or Quit anytime.\n\n"
+                "Please choose a language to learn: " + ", ".join(langs) + "\n\n"
+                + f"<suggested_replies>{suggestions}</suggested_replies>"
+            )
+
+        # Render a single exercise prompt (first item) in plain text with embedded metadata
+        # so the chat layer does not invent alternate prompts.
+        if not data or not isinstance(data, dict):
+            # Fallback to original body if parsing failed
+            suggestions = [
+                {"title": "Next", "id": "next_ex"},
+                {"title": "Hint", "id": "hint"},
+                {"title": "Quit", "id": "quit"},
+            ]
+            return resp.text + "\n\n" + f"<suggested_replies>{suggestions}</suggested_replies>"
+
+        exercises = data.get("exercises") or []
+        if not exercises:
+            suggestions = [
+                {"title": "Next", "id": "next_ex"},
+                {"title": "Quit", "id": "quit"},
+            ]
+            return (
+                "You're all caught up for now. No exercises available.\n\n"
+                + f"<suggested_replies>{suggestions}</suggested_replies>"
+            )
+
+        ex = exercises[0]
+        ex_id = ex.get("id") or ""
+        ex_type = ex.get("type") or "text"
+        prompt = ex.get("prompt") or ""
+        choices = ex.get("choices") or []
+
+        # Normalize some common prompt patterns for readability
+        human_prompt = prompt
+        if isinstance(prompt, str) and prompt.lower().startswith("translate:"):
+            # Show the quoted phrase cleanly
+            phrase = prompt.split(":", 1)[1].strip()
+            human_prompt = (
+                "Translate the following into the target language:\n\n" f"\"{phrase}\""
+            )
+        elif ex_type in ("mcq", "multiple_choice") and choices:
+            options = "\n".join([f"- {c}" for c in choices])
+            human_prompt = f"{prompt}\n\nChoose one:\n{options}"
+
+        # Suggestions for conversation flow
+        suggestions = [
+            {"title": "Next", "id": "next_ex"},
+            {"title": "Hint", "id": "hint"},
+            {"title": "Quit", "id": "quit"},
+        ]
+
+        # Embed machine-readable exercise metadata to keep state stable upstream
+        meta = {"exercise_id": ex_id, "type": ex_type}
+        instructions = "\n\nReply with your answer only (e.g., the word/phrase or 'a'/'b'/'c' for choices). It will be graded and your XP will update."
+        return (
+            human_prompt
+            + instructions
+            + "\n\n"
+            + f"<exercise_meta>{meta}</exercise_meta>"
+            + "\n\n"
+            + f"<suggested_replies>{suggestions}</suggested_replies>"
+        )
+
+
+# --- Media tools ---
+@mcp.tool(description="Analyze a user-provided image (base64) for OCR/metadata; returns suggested replies.")
+async def image_analyze(
+    puch_image_data: Annotated[str, Field(description="Base64-encoded image to analyze")],
+) -> str:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/media/image/analyze",
+            json={"image_b64": puch_image_data},
+        )
+        if resp.status_code >= 400:
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Backend error: {resp.text}"))
+        suggestions = [
+            {"title": "Next", "id": "next"},
+            {"title": "Explain", "id": "explain"},
+            {"title": "Try another", "id": "try_another"},
+        ]
+        # Also record an explicit media event for traceability
+        try:
+            _ = await client.post(f"{BACKEND_URL}/media/event", json={"event_type": "image_analyze_tool", "meta": {"size": len(puch_image_data)}})
+        except Exception:
+            pass
+        return resp.text + "\n\n" + f"<suggested_replies>{suggestions}</suggested_replies>"
+
+
+@mcp.tool(description="Transcribe a voice note (base64 audio) and return text with suggested actions.")
+async def transcribe_audio(
+    puch_audio_data: Annotated[str, Field(description="Base64-encoded audio data")],
+    mime_type: Annotated[str | None, Field(description="Optional audio MIME type e.g. audio/ogg")]=None,
+) -> str:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/media/audio/transcribe",
+            json={"audio_b64": puch_audio_data, "mime_type": mime_type},
+        )
+        if resp.status_code >= 400:
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Backend error: {resp.text}"))
+        suggestions = [
+            {"title": "Play again", "id": "play_again"},
+            {"title": "Slower", "id": "slower"},
+            {"title": "Next", "id": "next"},
+        ]
+        try:
+            _ = await client.post(f"{BACKEND_URL}/media/event", json={"event_type": "audio_transcribe_tool", "meta": {"size": len(puch_audio_data), "mime_type": mime_type}})
+        except Exception:
+            pass
+        return resp.text + "\n\n" + f"<suggested_replies>{suggestions}</suggested_replies>"
+
+
+@mcp.tool(description="Submit an answer for grading and XP/streak updates via backend")
+async def submit_answer(
+    user_id: Annotated[str, Field(description="User identifier")],
+    exercise_id: Annotated[str, Field(description="Exercise id")],
+    answer: Annotated[str, Field(description="User's answer")],
+) -> str:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/sessions/submit",
+            json={"user_id": user_id, "exercise_id": exercise_id, "answer": answer},
+        )
+        if resp.status_code >= 400:
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Backend error: {resp.text}"))
+        # Render a strict, backend-driven feedback message to avoid interpretation errors
+        try:
+            data = resp.json()
+        except Exception:
+            data = None
+
+        if not data or not isinstance(data, dict):
+            # Fallback to raw response
+            suggestions = [
+                {"title": "Next", "id": "next_ex"},
+                {"title": "Explain", "id": "explain"},
+                {"title": "Repeat", "id": "repeat"},
+            ]
+            return resp.text + "\n\n" + f"<suggested_replies>{suggestions}</suggested_replies>"
+
+        is_correct = bool(data.get("is_correct"))
+        feedback = data.get("feedback") or ("Correct!" if is_correct else "Incorrect.")
+        awarded = data.get("awarded_xp")
+        hearts = data.get("hearts")
+        streak = data.get("streak_count")
+
+        if is_correct:
+            parts = ["Correct! 🎉"]
+            if isinstance(awarded, int) and awarded > 0:
+                parts.append(f"+{awarded} XP")
+        else:
+            parts = [feedback]
+        summary = " ".join(parts)
+
+        # Provide follow-up actions as suggested replies
+        suggestions = [
+            {"title": "Next", "id": "next_ex"},
+            {"title": "Explain", "id": "explain"},
+            {"title": "Repeat", "id": "repeat"},
+        ]
+
+        # Include minimal machine-readable result meta
+        meta = {"correct": is_correct, "awarded_xp": awarded, "hearts": hearts, "streak": streak}
+        return (
+            summary
+            + "\n\n"
+            + f"<result_meta>{meta}</result_meta>"
+            + "\n\n"
+            + f"<suggested_replies>{suggestions}</suggested_replies>"
+        )
+
+
+@mcp.tool(description="Fetch daily goals and gamification status (xp, hearts, streak, quests)")
+async def gamification_status(
+    user_id: Annotated[str, Field(description="User identifier")],
+) -> str:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{BACKEND_URL}/gamification/status", params={"user_id": user_id})
+        if resp.status_code >= 400:
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Backend error: {resp.text}"))
+        suggestions = [
+            {"title": "Daily goal", "id": "daily_goal"},
+            {"title": "Start session", "id": "start_session"},
+            {"title": "Due cards", "id": "due_cards"},
+        ]
+        return resp.text + "\n\n" + f"<suggested_replies>{suggestions}</suggested_replies>"
+
+
+@mcp.tool(description="Get due SRS vocab items for the user")
+async def srs_due(
+    user_id: Annotated[str, Field(description="User identifier")],
+    limit: Annotated[int | None, Field(description="Optional limit of due items")] = 20,
+) -> str:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{BACKEND_URL}/srs/due", params={"user_id": user_id, "limit": limit})
+        if resp.status_code >= 400:
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Backend error: {resp.text}"))
+        suggestions = [
+            {"title": "Start review", "id": "start_review"},
+            {"title": "Skip", "id": "skip"},
+            {"title": "Back", "id": "back"},
+        ]
+        return resp.text + "\n\n" + f"<suggested_replies>{suggestions}</suggested_replies>"
 
 # --- Run MCP Server ---
 async def main():
