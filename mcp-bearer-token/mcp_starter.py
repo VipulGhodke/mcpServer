@@ -152,6 +152,20 @@ async def language_learning_assistant(
     """
     query_lower = user_query.lower()
     
+    # Auto-detect target language if not provided
+    if not target_language:
+        # Common language names to look for in the query
+        languages = [
+            "french", "spanish", "german", "italian", "portuguese", "russian", "chinese", "japanese", "korean", 
+            "arabic", "hindi", "dutch", "swedish", "norwegian", "danish", "finnish", "polish", "czech", 
+            "hungarian", "romanian", "bulgarian", "greek", "turkish", "hebrew", "thai", "vietnamese", "indonesian"
+        ]
+        
+        for language in languages:
+            if language in query_lower:
+                target_language = language.capitalize()
+                break
+    
     # Translation requests
     if any(word in query_lower for word in ["translate", "translation", "how do you say"]):
         if not source_text or not target_language:
@@ -191,8 +205,8 @@ async def language_learning_assistant(
             f"**Instructions:** Take your time and think about the grammar rules we've discussed."
         )
     
-    # Learning resources
-    elif any(word in query_lower for word in ["resource", "learn", "study", "material", "book", "app"]):
+    # Learning resources (only for specific resource requests)
+    elif any(word in query_lower for word in ["resource", "material", "book", "app"]) and not any(word in query_lower for word in ["learn", "study"]):
         return (
             f"📖 **Learning Resources for {target_language or 'Language Learning'}**\n\n"
             f"**Recommended Apps:**\n"
@@ -209,23 +223,33 @@ async def language_learning_assistant(
             f"- Watch movies/TV shows with subtitles"
         )
     
+    # Teaching basic concepts and vocabulary
+    elif any(word in query_lower for word in ["teach", "introduce", "explain", "show", "basics", "fundamentals"]) and target_language:
+        return (
+            f"🎯 **Perfect! Let's dive into {target_language}!**\n\n"
+            f"**What would you like to learn first?**\n\n"
+            f"**🗣️ Greetings** - Hello, goodbye, thank you\n"
+            f"**🔢 Numbers** - Count from 1-10\n"
+            f"**📝 Basic Grammar** - Simple sentences\n"
+            f"**💬 Common Phrases** - Everyday expressions\n\n"
+            f"**Just tell me which one interests you most!**\n"
+            f"For example: 'Teach me greetings' or 'I want to learn numbers'"
+        )
+    
     # General language learning advice
     else:
-        return (
-            f"🌍 **Language Learning Assistant**\n\n",
-            f"**Your Query:** {user_query}\n\n",
-            f"**How I can help you:**\n",
-            f"• Translate text between languages\n",
-            f"• Explain grammar rules and concepts\n",
-            f"• Provide practice exercises\n",
-            f"• Recommend learning resources\n",
-            f"• Help with pronunciation and vocabulary\n\n",
-            f"**Try asking:**\n",
-            f"- 'Translate \"Hello\" to Spanish'\n",
-            f"- 'Explain past tense in French'\n",
-            f"- 'Give me a practice exercise for beginners'\n",
-            f"- 'Find resources to learn Japanese'"
-        )
+        # Check if this is a general "want to learn X language" request
+        if target_language and any(word in query_lower for word in ["learn", "start", "begin", "new"]):
+            return (
+                f"🎉 **Great choice! Let's start learning {target_language}!**\n\n"
+                f"**Ready to begin? Here are your options:**\n\n"
+                f"**🗣️ Start with Greetings** - Learn hello, goodbye, thank you\n"
+                f"**🔢 Learn Numbers** - Count from 1-10\n"
+                f"**📝 Basic Grammar** - Simple sentence structure\n"
+                f"**💬 Simple Phrases** - Everyday expressions\n\n"
+                f"**What sounds most interesting to you?**\n"
+                f"Just say: 'Teach me greetings' or 'I want to learn numbers' or 'Show me basic grammar'"
+            )
 
 
 # --- Tool: vocabulary_practice (vocabulary learning!) ---
